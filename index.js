@@ -4,7 +4,17 @@
 var net = require('net'),
     readline = require('readline');
 
-var map = {};
+var map = {},
+    commands = {
+        info : require('./commands/info')(map),
+        ping : require('./commands/ping')(map),
+        get : require('./commands/get')(map),
+        set : require('./commands/set')(map),
+        exists : require('./commands/exists')(map),
+        del : require('./commands/del')(map),
+        mget : require('./commands/mget')(map)
+    };
+
 
 var server = net.createServer(function(socket) { //'connection' listener
     console.log('client connected');
@@ -15,7 +25,7 @@ var server = net.createServer(function(socket) { //'connection' listener
     var totalParts = -1,
         parts = 0,
         next = -1,
-        command = [],
+        commandParts = [],
         reset = function(socket){
             if(socket)
                 socket.write('-ERR wrong command\r\n');
@@ -47,69 +57,15 @@ var server = net.createServer(function(socket) { //'connection' listener
                 if(line.length != next){
                     return reset(socket);
                 }
-                command[parts++] = line;
+                commandParts[parts++] = line;
                 next = -1;
                 if(parts < totalParts)
                     return;
 
-                switch(command[0].toLowerCase()){
-                    case 'info': // TODO Build info
-                        socket.write('+OK\r\n');
-                        break;
-                    case 'ping':
-                        socket.write('+PONG\r\n');
-                        break;
-                    case 'exists':
-                        var value = map[command[1]];
-                        if(value == undefined) {
-                            socket.write(':0\r\n');
-                        } else {
-                            socket.write(':1\r\n');
-                        }
-                        break;
-                    case 'set':
-                        map[command[1]] = command[2];
-                        socket.write('+OK\r\n');
-                        break;
-                    case 'del':
-                        var count = 0;
-                        for( var i=1; i<parts ; ++i){
-                            var key = command[i],
-                                value = map[key];
-                            if(value != undefined) {
-                                delete map[key];
-                                ++count;
-                            }
-                        }
-                        socket.write(':' + count + '\r\n');
-                        break;
-                    case 'get':
-                        var value = map[command[1]];
-                        if(value == undefined) {
-                            socket.write('$-1\r\n');
-                        } else {
-                            socket.write('$' + value.length.toString() + '\r\n' + value + '\r\n');
-                        }
-                        break;
-                    case 'mget':
-                        var result = new Array(parts-1);
-                        for( var i=1; i<parts ; ++i){
-                            var key = command[i],
-                                value = map[key];
-                            if(value == undefined) {
-                                result[i-1] = '$-1\r\n';
-                            } else {
-                                result[i-1] = '$' + value.length + '\r\n' + value + '\r\n';
-                            }
-                        }
-                        socket.write('*' + result.length + '\r\n');
-                        for( var i=0; i<result.length ; ++i){
-                            socket.write(result[i]);
-                        }
-                        break;
-                    default:
-                        return reset(socket);
-                }
+                var command = commands[commandParts[0].toLowerCase()];
+                if(command == undefined)
+                    return reset(socket);
+                command(commandParts, socket, parts);
                 reset();
                 break;
         }
