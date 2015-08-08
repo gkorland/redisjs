@@ -18,7 +18,7 @@ var server = net.createServer(function(socket) { //'connection' listener
         command = [],
         reset = function(socket){
             if(socket)
-                socket.write('+ERROR\r\n');
+                socket.write('-ERR wrong command\r\n');
             totalParts = -1;
             parts = 0;
             next = -1;
@@ -56,20 +56,61 @@ var server = net.createServer(function(socket) { //'connection' listener
                     case 'ping':
                         socket.write('+PONG\r\n');
                         break;
+                    case 'exists':
+                        var value = map[command[1]];
+                        if(value) {
+                            socket.write(':1\r\n');
+                        } else {
+                            socket.write(':0\r\n');
+                        }
+                        break;
                     case 'set':
                         map[command[1]] = command[2];
                         socket.write('+OK\r\n');
                         break;
+                    case 'del':
+                        var count = 0;
+                        for( var i=1; i<parts ; ++i){
+                            var key = command[i],
+                                value = map[key];
+                            if(value) {
+                                delete map[key];
+                                ++count;
+                            }
+                        }
+                        socket.write(':' + count + '\r\n');
+                        break;
                     case 'get':
                         var value = map[command[1]];
                         if(value) {
-                            socket.write('+');
-                            socket.write(map[command[1]]);
-                            socket.write('\r\n');
+                            socket.write('$' + value.length.toString() + '\r\n' + value + '\r\n');
                         } else {
                             socket.write('$-1\r\n');
                         }
                         break;
+                    case 'mget': // TODO finish it
+                        var result = new Array();
+                        for( var i=1; i<parts ; ++i){
+                            var key = command[i],
+                                value = map[key];
+                            if(value) {
+                                result[i] = value;
+                            } else {
+                                result[i] = '$-1\r\n';
+                            }
+                        }
+                        socket.write(':' + count + '\r\n');
+
+
+                        var value = map[command[1]];
+                        if(value) {
+                            socket.write('$' + value.length.toString() + '\r\n' + value + '\r\n');
+                        } else {
+                            socket.write('$-1\r\n');
+                        }
+                        break;
+                    default:
+                        return reset(socket);
                 }
                 reset();
                 break;
